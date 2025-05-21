@@ -21,18 +21,30 @@
             color: #666;
             margin-top: 10px;
         }
+        .input-area {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+        .input-group {
+            margin-bottom: 10px;
+        }
     </style>
 </head>
 <body>
     <div class="container mt-5">
         <h1 class="mb-4">Simple C Interpreter</h1>
         <div class="note mb-4">
-            <p>This is a simplified C interpreter that currently supports basic printf statements. It's designed to work in a serverless environment.</p>
+            <p>This is a simplified C interpreter that supports basic printf and scanf statements. It's designed to work in a serverless environment.</p>
             <!-- <p>Example code:</p>
             <pre>#include <stdio.h>
 
 int main() {
-    printf("Hello, World!\n");
+    int number;
+    printf("Enter a number: ");
+    scanf("%d", &number);
+    printf("You entered: %d\n", number);
     return 0;
 }</pre> -->
         </div>
@@ -43,7 +55,10 @@ int main() {
                     <textarea id="code" class="form-control editor">#include <stdio.h>
 
 int main() {
-    printf("Hello, World!\n");
+    int number;
+    printf("Enter a number: ");
+    scanf("%d", &number);
+    printf("You entered: %d\n", number);
     return 0;
 }</textarea>
                 </div>
@@ -54,16 +69,29 @@ int main() {
                     <label class="form-label">Output:</label>
                     <div id="output" class="output"></div>
                 </div>
+                <div id="inputArea" class="input-area" style="display: none;">
+                    <h5>Program Input</h5>
+                    <div id="inputFields"></div>
+                    <button onclick="submitInputs()" class="btn btn-success mt-3">Submit Inputs</button>
+                </div>
             </div>
         </div>
     </div>
 
     <script>
+        let currentCode = '';
+        let waitingForInput = false;
+
         async function compileCode() {
             const code = document.getElementById('code').value;
+            currentCode = code;
             const outputDiv = document.getElementById('output');
+            const inputArea = document.getElementById('inputArea');
+            const inputFields = document.getElementById('inputFields');
             
             outputDiv.innerHTML = 'Running code...';
+            inputArea.style.display = 'none';
+            inputFields.innerHTML = '';
             
             try {
                 const response = await fetch('/compile', {
@@ -71,7 +99,10 @@ int main() {
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ code }),
+                    body: JSON.stringify({ 
+                        code,
+                        inputs: []
+                    }),
                 });
                 
                 const result = await response.json();
@@ -81,6 +112,62 @@ int main() {
                     if (result.error) {
                         outputDiv.innerHTML += `<pre class="text-danger">${result.error}</pre>`;
                     }
+                    
+                    // Check if we need to wait for input
+                    if (result.output.includes('Waiting for input')) {
+                        waitingForInput = true;
+                        inputArea.style.display = 'block';
+                        
+                        // Count the number of scanf statements
+                        const scanfCount = (result.output.match(/Waiting for input/g) || []).length;
+                        
+                        // Create input fields
+                        for (let i = 0; i < scanfCount; i++) {
+                            const inputGroup = document.createElement('div');
+                            inputGroup.className = 'input-group';
+                            inputGroup.innerHTML = `
+                                <input type="text" class="form-control" placeholder="Enter value">
+                            `;
+                            inputFields.appendChild(inputGroup);
+                        }
+                    }
+                } else {
+                    outputDiv.innerHTML = `<pre class="text-danger">${result.error}</pre>`;
+                }
+            } catch (error) {
+                outputDiv.innerHTML = `<pre class="text-danger">Error: ${error.message}</pre>`;
+            }
+        }
+
+        async function submitInputs() {
+            if (!waitingForInput) return;
+            
+            const inputs = Array.from(document.querySelectorAll('#inputFields input'))
+                .map(input => input.value);
+            
+            const outputDiv = document.getElementById('output');
+            
+            try {
+                const response = await fetch('/compile', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        code: currentCode,
+                        inputs: inputs
+                    }),
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    outputDiv.innerHTML = `<pre>${result.output || ''}</pre>`;
+                    if (result.error) {
+                        outputDiv.innerHTML += `<pre class="text-danger">${result.error}</pre>`;
+                    }
+                    waitingForInput = false;
+                    document.getElementById('inputArea').style.display = 'none';
                 } else {
                     outputDiv.innerHTML = `<pre class="text-danger">${result.error}</pre>`;
                 }
