@@ -133,8 +133,8 @@ int main() {
             const lines = text.split('\n');
             
             lines.forEach(line => {
-                if (line.includes('Waiting for input')) {
-                    // Don't display the waiting message
+                if (line === "Waiting for input") {
+                    createInputField();
                     return;
                 }
                 const lineDiv = document.createElement('div');
@@ -179,12 +179,6 @@ int main() {
                         
                         if (result.success) {
                             displayOutput(result.output);
-                            
-                            if (result.output.includes('Waiting for input')) {
-                                createInputField();
-                            } else {
-                                waitingForInput = false;
-                            }
                         } else {
                             outputDiv.innerHTML += `<span class="text-danger">${result.error}</span>`;
                         }

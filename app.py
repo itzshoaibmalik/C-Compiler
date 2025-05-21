@@ -11,31 +11,32 @@ def interpret_c_code(code, user_inputs=None):
     output = []
     input_index = 0
     
-    # Extract printf statements
-    printf_pattern = r'printf\s*\(\s*"([^"]*)"\s*\)'
-    printf_matches = re.finditer(printf_pattern, code)
-    
-    # Extract scanf statements
-    scanf_pattern = r'scanf\s*\(\s*"([^"]*)"\s*,\s*&?(\w+)\s*\)'
-    scanf_matches = re.finditer(scanf_pattern, code)
-    
-    # Process printf statements
-    for match in printf_matches:
-        # Replace \n with actual newlines
-        text = match.group(1).replace('\\n', '\n')
-        output.append(text)
-    
-    # Process scanf statements
-    for match in scanf_matches:
-        format_str = match.group(1)
-        var_name = match.group(2)
+    # Split code into lines and process sequentially
+    lines = code.split('\n')
+    for line in lines:
+        line = line.strip()
         
-        if input_index < len(user_inputs):
-            # Add the input value to output
-            output.append(f"Input for {var_name}: {user_inputs[input_index]}")
-            input_index += 1
-        else:
-            output.append(f"Waiting for input for {var_name}")
+        # Skip empty lines and comments
+        if not line or line.startswith('//'):
+            continue
+            
+        # Process printf statements
+        printf_match = re.search(r'printf\s*\(\s*"([^"]*)"\s*\)', line)
+        if printf_match:
+            text = printf_match.group(1).replace('\\n', '\n')
+            output.append(text)
+            continue
+            
+        # Process scanf statements
+        scanf_match = re.search(r'scanf\s*\(\s*"([^"]*)"\s*,\s*&?(\w+)\s*\)', line)
+        if scanf_match:
+            if input_index < len(user_inputs):
+                # Just add the input value without extra text
+                output.append(user_inputs[input_index])
+                input_index += 1
+            else:
+                output.append("Waiting for input")
+                break  # Stop processing until we get input
     
     return '\n'.join(output)
 
