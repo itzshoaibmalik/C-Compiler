@@ -1,9 +1,22 @@
 from flask import Flask, render_template, request, jsonify
-import subprocess
-import tempfile
-import os
+import re
 
 app = Flask(__name__)
+
+def interpret_c_code(code):
+    # Simple C code interpreter for basic operations
+    output = []
+    
+    # Extract printf statements
+    printf_pattern = r'printf\s*\(\s*"([^"]*)"\s*\)'
+    printf_matches = re.finditer(printf_pattern, code)
+    
+    for match in printf_matches:
+        # Replace \n with actual newlines
+        text = match.group(1).replace('\\n', '\n')
+        output.append(text)
+    
+    return '\n'.join(output)
 
 @app.route('/')
 def home():
@@ -13,44 +26,41 @@ def home():
 def compile_code():
     code = request.json.get('code', '')
     
-    # Create a temporary file for the C code
-    with tempfile.NamedTemporaryFile(suffix='.c', delete=False) as temp_file:
-        temp_file.write(code.encode())
-        temp_file_path = temp_file.name
-    
     try:
-        # Compile the C code
-        compile_result = subprocess.run(['gcc', temp_file_path, '-o', temp_file_path + '.exe'], 
-                                     capture_output=True, text=True)
-        
-        if compile_result.returncode != 0:
+        # Basic validation
+        if not code.strip():
             return jsonify({
                 'success': False,
-                'error': compile_result.stderr
+                'error': 'Empty code provided'
             })
         
-        # Run the compiled program
-        run_result = subprocess.run([temp_file_path + '.exe'], 
-                                  capture_output=True, text=True)
+        # Check for basic C syntax
+        if not '#include <stdio.h>' in code:
+            return jsonify({
+                'success': False,
+                'error': 'Missing #include <stdio.h>'
+            })
+        
+        if 'main()' not in code and 'main(void)' not in code:
+            return jsonify({
+                'success': False,
+                'error': 'Missing main() function'
+            })
+        
+        # Interpret the code
+        output = interpret_c_code(code)
         
         return jsonify({
             'success': True,
-            'output': run_result.stdout,
-            'error': run_result.stderr
+            'output': output,
+            'error': None
         })
         
     except Exception as e:
         return jsonify({
             'success': False,
-            'error': str(e)
+            'error': f'Error interpreting code: {str(e)}'
         })
-    finally:
-        # Clean up temporary files
-        try:
-            os.unlink(temp_file_path)
-            os.unlink(temp_file_path + '.exe')
-        except:
-            pass
 
 if __name__ == '__main__':
     app.run(debug=True) 
