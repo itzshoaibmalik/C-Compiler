@@ -12,23 +12,36 @@
         }
         .output {
             min-height: 100px;
-            background-color: #f8f9fa;
+            background-color: #1e1e1e;
+            color: #fff;
             padding: 10px;
             border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .input-line {
+            display: flex;
+            align-items: center;
+            margin-top: 5px;
+        }
+        .input-line::before {
+            content: "> ";
+            color: #0f0;
+        }
+        .input-field {
+            background: transparent;
+            border: none;
+            color: #fff;
+            font-family: monospace;
+            flex-grow: 1;
+            outline: none;
+            padding: 0;
+            margin: 0;
         }
         .note {
             font-size: 0.9em;
             color: #666;
             margin-top: 10px;
-        }
-        .input-area {
-            margin-top: 20px;
-            padding: 15px;
-            background-color: #f8f9fa;
-            border-radius: 4px;
-        }
-        .input-group {
-            margin-bottom: 10px;
         }
     </style>
 </head>
@@ -69,11 +82,6 @@ int main() {
                     <label class="form-label">Output:</label>
                     <div id="output" class="output"></div>
                 </div>
-                <div id="inputArea" class="input-area" style="display: none;">
-                    <h5>Program Input</h5>
-                    <div id="inputFields"></div>
-                    <button onclick="submitInputs()" class="btn btn-success mt-3">Submit Inputs</button>
-                </div>
             </div>
         </div>
     </div>
@@ -81,17 +89,15 @@ int main() {
     <script>
         let currentCode = '';
         let waitingForInput = false;
+        let inputCallback = null;
 
         async function compileCode() {
             const code = document.getElementById('code').value;
             currentCode = code;
             const outputDiv = document.getElementById('output');
-            const inputArea = document.getElementById('inputArea');
-            const inputFields = document.getElementById('inputFields');
             
-            outputDiv.innerHTML = 'Running code...';
-            inputArea.style.display = 'none';
-            inputFields.innerHTML = '';
+            outputDiv.innerHTML = '';
+            waitingForInput = false;
             
             try {
                 const response = await fetch('/compile', {
@@ -108,72 +114,89 @@ int main() {
                 const result = await response.json();
                 
                 if (result.success) {
-                    outputDiv.innerHTML = `<pre>${result.output || ''}</pre>`;
-                    if (result.error) {
-                        outputDiv.innerHTML += `<pre class="text-danger">${result.error}</pre>`;
-                    }
+                    displayOutput(result.output);
                     
-                    // Check if we need to wait for input
                     if (result.output.includes('Waiting for input')) {
                         waitingForInput = true;
-                        inputArea.style.display = 'block';
-                        
-                        // Count the number of scanf statements
-                        const scanfCount = (result.output.match(/Waiting for input/g) || []).length;
-                        
-                        // Create input fields
-                        for (let i = 0; i < scanfCount; i++) {
-                            const inputGroup = document.createElement('div');
-                            inputGroup.className = 'input-group';
-                            inputGroup.innerHTML = `
-                                <input type="text" class="form-control" placeholder="Enter value">
-                            `;
-                            inputFields.appendChild(inputGroup);
-                        }
+                        createInputField();
                     }
                 } else {
-                    outputDiv.innerHTML = `<pre class="text-danger">${result.error}</pre>`;
+                    outputDiv.innerHTML += `<span class="text-danger">${result.error}</span>`;
                 }
             } catch (error) {
-                outputDiv.innerHTML = `<pre class="text-danger">Error: ${error.message}</pre>`;
+                outputDiv.innerHTML += `<span class="text-danger">Error: ${error.message}</span>`;
             }
         }
 
-        async function submitInputs() {
-            if (!waitingForInput) return;
-            
-            const inputs = Array.from(document.querySelectorAll('#inputFields input'))
-                .map(input => input.value);
-            
+        function displayOutput(text) {
             const outputDiv = document.getElementById('output');
+            const lines = text.split('\n');
             
-            try {
-                const response = await fetch('/compile', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ 
-                        code: currentCode,
-                        inputs: inputs
-                    }),
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    outputDiv.innerHTML = `<pre>${result.output || ''}</pre>`;
-                    if (result.error) {
-                        outputDiv.innerHTML += `<pre class="text-danger">${result.error}</pre>`;
-                    }
-                    waitingForInput = false;
-                    document.getElementById('inputArea').style.display = 'none';
-                } else {
-                    outputDiv.innerHTML = `<pre class="text-danger">${result.error}</pre>`;
+            lines.forEach(line => {
+                if (line.includes('Waiting for input')) {
+                    // Don't display the waiting message
+                    return;
                 }
-            } catch (error) {
-                outputDiv.innerHTML = `<pre class="text-danger">Error: ${error.message}</pre>`;
-            }
+                const lineDiv = document.createElement('div');
+                lineDiv.textContent = line;
+                outputDiv.appendChild(lineDiv);
+            });
+        }
+
+        function createInputField() {
+            const outputDiv = document.getElementById('output');
+            const inputLine = document.createElement('div');
+            inputLine.className = 'input-line';
+            
+            const inputField = document.createElement('input');
+            inputField.type = 'text';
+            inputField.className = 'input-field';
+            inputField.autofocus = true;
+            
+            inputField.addEventListener('keypress', async function(e) {
+                if (e.key === 'Enter') {
+                    const input = this.value;
+                    this.disabled = true;
+                    
+                    // Display the input
+                    const inputDisplay = document.createElement('div');
+                    inputDisplay.textContent = input;
+                    inputLine.appendChild(inputDisplay);
+                    
+                    try {
+                        const response = await fetch('/compile', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ 
+                                code: currentCode,
+                                inputs: [input]
+                            }),
+                        });
+                        
+                        const result = await response.json();
+                        
+                        if (result.success) {
+                            displayOutput(result.output);
+                            
+                            if (result.output.includes('Waiting for input')) {
+                                createInputField();
+                            } else {
+                                waitingForInput = false;
+                            }
+                        } else {
+                            outputDiv.innerHTML += `<span class="text-danger">${result.error}</span>`;
+                        }
+                    } catch (error) {
+                        outputDiv.innerHTML += `<span class="text-danger">Error: ${error.message}</span>`;
+                    }
+                }
+            });
+            
+            inputLine.appendChild(inputField);
+            outputDiv.appendChild(inputLine);
+            inputField.focus();
         }
     </script>
 </body>
