@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>C Compiler</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .editor {
+            height: 300px;
+            font-family: monospace;
+        }
+        .output {
+            min-height: 100px;
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <h1 class="mb-4">C Compiler</h1>
+        <div class="row">
+            <div class="col-md-6">
+                <div class="mb-3">
+                    <label for="code" class="form-label">C Code:</label>
+                    <textarea id="code" class="form-control editor">#include <stdio.h>
+
+int main() {
+    printf("Hello, World!\n");
+    return 0;
+}</textarea>
+                </div>
+                <button onclick="compileCode()" class="btn btn-primary">Compile & Run</button>
+            </div>
+            <div class="col-md-6">
+                <div class="mb-3">
+                    <label class="form-label">Output:</label>
+                    <div id="output" class="output"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function compileCode() {
+            const code = document.getElementById('code').value;
+            const outputDiv = document.getElementById('output');
+            
+            outputDiv.innerHTML = 'Compiling and running...';
+            
+            try {
+                const response = await fetch('/compile', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ code }),
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    outputDiv.innerHTML = `<pre>${result.output || ''}</pre>`;
+                    if (result.error) {
+                        outputDiv.innerHTML += `<pre class="text-danger">${result.error}</pre>`;
+                    }
+                } else {
+                    outputDiv.innerHTML = `<pre class="text-danger">${result.error}</pre>`;
+                }
+            } catch (error) {
+                outputDiv.innerHTML = `<pre class="text-danger">Error: ${error.message}</pre>`;
+            }
+        }
+    </script>
+</body>
+</html> 
